@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from core.config import Cfg
-from core import detect, loader, physics, quality, ai
+from core import detect, loader, physics, quality
 
 st.set_page_config(page_title="AC EER Analyzer", layout="wide")
 st.title("วิเคราะห์สมรรถนะเครื่องปรับอากาศ (EER / BTU)")
@@ -220,16 +220,6 @@ with st.expander("ดูแถวที่น่าสงสัยที่ส�
             "Power_Corrected (kW)", "EER", "n_flags"]
     st.dataframe(m[m["suspect"]].nlargest(20, "n_flags")[show].round(3),
                  use_container_width=True, hide_index=True)
-
-st.subheader("วิเคราะห์ด้วย AI")
-api_key = get_secret("OPENAI_API_KEY") or st.text_input(
-    "OpenAI API Key", type="password", key="apikey")
-if st.button("ให้ AI วิเคราะห์", type="primary", disabled=not api_key):
-    show = ["Date/Time", "Enthapy", "Delta T", "btu", "kw_raw",
-            "Power_Corrected (kW)", "EER", "n_flags"]
-    samples = m[m["suspect"]].nlargest(20, "n_flags")[show].round(3).to_dict("records")
-    with st.spinner("AI กำลังอ่านข้อมูล..."):
-        st.markdown(ai.analyze(quality.summary(m, cfg), samples, api_key))
 
 st.download_button("ดาวน์โหลดผลลัพธ์ CSV",
                    m.to_csv(index=False).encode("utf-8-sig"),
