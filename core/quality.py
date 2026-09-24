@@ -36,7 +36,7 @@ def flag(d, cfg):
         "ความเร็วลมหลุด ±SD": d["wind_out_of_sd"],
         "คอมเพรสเซอร์ตัด (kW ต่ำมาก)": kw < cfg.min_kw,
         "kW เกินสเปก > 20%": kw > cfg.power_spec * 1.2,
-        "BTU เกินสเปก > 30%": btu > cfg.btu_spec * 1.3,
+        "BTU เกินสเปก > 10%": btu > cfg.btu_spec * 1.1,
         "BTU ต่ำกว่าครึ่งของสเปก": btu < cfg.btu_spec * 0.5,
         "EER สูงเกินจริง (> 1.5 เท่าสเปก)": eer > cfg.eer_spec * 1.5,
         "EER ติดลบ": eer < 0,
