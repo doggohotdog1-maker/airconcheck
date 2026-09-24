@@ -1,4 +1,4 @@
-"""เรียก LLM ให้อ่านสรุป + ตัวอย่างแถวน่าสงสัย แล้วอธิบายเชิงวิศวกรรม"""
+"""เรียก Gemini API ให้อ่านสรุป + ตัวอย่างแถวน่าสงสัย แล้วอธิบายเชิงวิศวกรรม"""
 import json
 
 SYSTEM = """คุณเป็นวิศวกรทดสอบสมรรถนะเครื่องปรับอากาศหน้างาน ใช้วิธี air-enthalpy
@@ -17,26 +17,26 @@ SYSTEM = """คุณเป็นวิศวกรทดสอบสมรร�
 5. ข้อควรปรับปรุงในการวัดครั้งหน้า"""
 
 
-def analyze(ctx, samples, api_key, model="gpt-4o"):
+def analyze(ctx, samples, api_key, model="gemini-2.5-flash"):
     if not api_key:
         return "ยังไม่ได้ใส่ API Key"
     try:
-        from openai import OpenAI
+        from google import genai
+        from google.genai import types
     except ImportError:
-        return "ยังไม่ได้ติดตั้งไลบรารี openai (pip install openai)"
+        return "ยังไม่ได้ติดตั้งไลบรารี google-genai (รบกวนเพิ่ม google-genai ใน requirements.txt)"
 
     payload = {"สรุปผลการวัด": ctx, "ตัวอย่างแถวที่น่าสงสัย": samples}
     try:
-        client = OpenAI(api_key=api_key)
-        r = client.chat.completions.create(
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
             model=model,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": json.dumps(
-                    payload, ensure_ascii=False, default=str)},
-            ],
+            contents=json.dumps(payload, ensure_ascii=False, default=str),
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM,
+                temperature=0.2,
+            ),
         )
-        return r.choices[0].message.content
+        return response.text
     except Exception as e:
-        return f"เรียก AI ไม่สำเร็จ: {e}"
+        return f"เรียก Gemini AI ไม่สำเร็จ: {e}"
