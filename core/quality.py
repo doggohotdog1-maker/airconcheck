@@ -25,35 +25,36 @@ def flag(d, cfg):
     s_rh = pd.to_numeric(d[cfg.supply_rh], errors="coerce")
     r_rh = pd.to_numeric(d[cfg.return_rh], errors="coerce")
 
-    # 1. หาค่า kW สูงสุดของไฟล์นี้
+    # 1. เช็กเกณฑ์แอร์ตัด (ต่ำกว่า 80% ของ Power สูงสุด)
     max_kw = kw.max() if (kw.notna().any() and kw.max() > 0) else cfg.power_spec
-    
-    # 2. ตั้งเกณฑ์แอร์ตัด: ต่ำกว่า 80% ของ Max (หรือถ้าไม่มีค่า ให้ใช้ min_kw สำรอง)
     cutoff_threshold = max_kw * 0.8
+    is_cutoff = (kw < cutoff_threshold) & kw.notna()
 
+    # 2. กำหนด Flag ต่างๆ (ถ้าเป็นช่วงแอร์ตัด ให้ข้ามการตรวจ Flag อื่นด้วย ~is_cutoff)
     F = {
         "ไม่มีข้อมูลไฟฟ้าตรงเวลานี้": kw.isna(),
-        "Δh ติดลบ (ไม่ทำความเย็น)": enth <= 0,
-        "Δh ต่ำผิดปกติ (< 2 kJ/kg)": (enth > 0) & (enth < 2),
-        "Supply ร้อนกว่า Return": d["Delta T"] <= 0,
-        "RH อิ่มตัว 100% (sensor เปียก)": (s_rh >= 99.5) | (r_rh >= 99.5),
-        "Wet bulb นอกช่วงตาราง (factor อิ่มตัว)": d["wb_clipped"],
-        "CDU นอกช่วงตาราง (factor อิ่มตัว)": d["cdu_clipped"],
-        "ความเร็วลมหลุด ±SD": d["wind_out_of_sd"],
-        "คอมเพรสเซอร์ตัด (kW ต่ำกว่า 80% ของ Max)": kw < cutoff_threshold,  # <-- แก้จุดนี้
-        "kW เกินสเปก > 20%": kw > cfg.power_spec * 1.2,
-        "BTU เกินสเปก > 30%": btu > cfg.btu_spec * 1.3,
-        "BTU ต่ำกว่าครึ่งของสเปก": btu < cfg.btu_spec * 0.5,
-        "EER สูงเกินจริง (> 1.5 เท่าสเปก)": eer > cfg.eer_spec * 1.5,
-        "EER ติดลบ": eer < 0,
-        "ลมกระโดด (spike)": mad_outlier(d[cfg.wind_speed]),
-        "kW กระโดด (spike)": mad_outlier(kw),
+        "คอมเพรสเซอร์ตัด (kW ต่ำกว่า 80% ของ Max)": is_cutoff,
+        "Δh ติดลบ (ไม่ทำความเย็น)": (enth <= 0) & ~is_cutoff,
+        "Δh ต่ำผิดปกติ (< 2 kJ/kg)": (enth > 0) & (enth < 2) & ~is_cutoff,
+        "Supply ร้อนกว่า Return": (d["Delta T"] <= 0) & ~is_cutoff,
+        "RH อิ่มตัว 100% (sensor เปียก)": ((s_rh >= 99.5) | (r_rh >= 99.5)) & ~is_cutoff,
+        "Wet bulb นอกช่วงตาราง (factor อิ่มตัว)": d["wb_clipped"] & ~is_cutoff,
+        "CDU นอกช่วงตาราง (factor อิ่มตัว)": d["cdu_clipped"] & ~is_cutoff,
+        "ความเร็วลมหลุด ±SD": d["wind_out_of_sd"] & ~is_cutoff,
+        "kW เกินสเปก > 20%": (kw > cfg.power_spec * 1.2) & ~is_cutoff,
+        "BTU เกินสเปก > 10%": (btu > cfg.btu_spec * 1.1) & ~is_cutoff,
+        "BTU ต่ำกว่าสเปก > 30%": (btu < cfg.btu_spec * 0.7) & ~is_cutoff,  # <-- แก้เกณฑ์ตรงนี้ (ต่ำกว่า 70% ของสเปก)
+        "EER สูงเกินจริง (> 1.5 เท่าสเปก)": (eer > cfg.eer_spec * 1.5) & ~is_cutoff,
+        "EER ติดลบ": (eer < 0) & ~is_cutoff,
+        "ลมกระโดด (spike)": mad_outlier(d[cfg.wind_speed]) & ~is_cutoff,
+        "kW กระโดด (spike)": mad_outlier(kw) & ~is_cutoff,
     }
 
     for name, mask in F.items():
         d[FLAG_PREFIX + name] = pd.Series(mask, index=d.index).fillna(False).astype(bool)
 
-    cols = [c for c in d.columns if c.startswith(FLAG_PREFIX)]
+    # 3. รวมจำนวน Flag (นับเฉพาะจุดผิดปกติจริงๆ ไม่นับแอร์ตัดเป็นจุดสงสัย/ขยะ)
+    cols = [c for c in d.columns if c.startswith(FLAG_PREFIX) and "คอมเพรสเซอร์ตัด" not in c]
     d["n_flags"] = d[cols].sum(axis=1).astype(int)
     d["suspect"] = d["n_flags"] > 0
     return d
