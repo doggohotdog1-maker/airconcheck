@@ -25,9 +25,11 @@ def flag(d, cfg):
     s_rh = pd.to_numeric(d[cfg.supply_rh], errors="coerce")
     r_rh = pd.to_numeric(d[cfg.return_rh], errors="coerce")
 
-    # หาค่า Max Power ของไฟล์ชุดนี้ (ถ้าหาไม่ได้ ให้ใช้ค่าจาก cfg.min_kw สำรองไว้)
-    max_kw = kw.max() if kw.notna().any() else 0
-    cutoff_kw = max_kw * 0.8 if max_kw > 0 else cfg.min_kw
+    # 1. หาค่า kW สูงสุดของไฟล์นี้
+    max_kw = kw.max() if (kw.notna().any() and kw.max() > 0) else cfg.power_spec
+    
+    # 2. ตั้งเกณฑ์แอร์ตัด: ต่ำกว่า 80% ของ Max (หรือถ้าไม่มีค่า ให้ใช้ min_kw สำรอง)
+    cutoff_threshold = max_kw * 0.8
 
     F = {
         "ไม่มีข้อมูลไฟฟ้าตรงเวลานี้": kw.isna(),
@@ -38,9 +40,9 @@ def flag(d, cfg):
         "Wet bulb นอกช่วงตาราง (factor อิ่มตัว)": d["wb_clipped"],
         "CDU นอกช่วงตาราง (factor อิ่มตัว)": d["cdu_clipped"],
         "ความเร็วลมหลุด ±SD": d["wind_out_of_sd"],
-        "คอมเพรสเซอร์ตัด (kW ต่ำกว่า 80% ของ Max)": kw < cutoff_kw,  # <-- แก้เป็นต่ำกว่า 80% ของ Max
+        "คอมเพรสเซอร์ตัด (kW ต่ำกว่า 80% ของ Max)": kw < cutoff_threshold,  # <-- แก้จุดนี้
         "kW เกินสเปก > 20%": kw > cfg.power_spec * 1.2,
-        "BTU เกินสเปก > 10%": btu > cfg.btu_spec * 1.1,
+        "BTU เกินสเปก > 30%": btu > cfg.btu_spec * 1.3,
         "BTU ต่ำกว่าครึ่งของสเปก": btu < cfg.btu_spec * 0.5,
         "EER สูงเกินจริง (> 1.5 เท่าสเปก)": eer > cfg.eer_spec * 1.5,
         "EER ติดลบ": eer < 0,
