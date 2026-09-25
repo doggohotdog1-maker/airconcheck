@@ -159,15 +159,21 @@ def read_power(file):
     if not kw_cols:
         raise KeyError(f"ไม่พบคอลัมน์กำลังไฟ (KW) — มี: {list(df.columns)}")
 
-    # 2. ค้นหาคอลัมน์ 3 Phase และ 1 Phase
-    three = [c for c in kw_cols if "3 phase" in c.lower() or "3 ph" in c.lower()]
-    one = [c for c in kw_cols if "l1 phase" in c.lower() or "l1 ph" in c.lower()]
+    # 2. ค้นหาคอลัมน์ 3 Phase โดยตัด L3 Phase ออก (ป้องกัน L3 Phase หลุดมาติด 3 Phase)
+    three = [
+        c for c in kw_cols 
+        if ("3 phase" in c.lower() or "3ph" in c.lower() or "3-phase" in c.lower())
+        and "l3" not in c.lower()
+    ]
+    
+    # 3. ค้นหาคอลัมน์ 1 Phase (L1)
+    one = [c for c in kw_cols if "l1" in c.lower() or "phase 1" in c.lower()]
 
-    # 3. ค้นหาคอลัมน์ที่เป็น Average
+    # 4. ค้นหาคอลัมน์ที่เป็น Average (ขึ้นต้นด้วย avg หรือมี avg)
     avg3 = [c for c in three if "avg" in c.lower()]
     avg1 = [c for c in one if "avg" in c.lower()]
 
-    # 4. เลือกลำดับความสำคัญ
+    # 5. เลือกลำดับความสำคัญของคอลัมน์ที่จะนำมาใช้
     if avg3:
         kw_col, phase = avg3[0], 3
     elif three:
@@ -197,7 +203,6 @@ def read_power(file):
     notes.append(f"ไฟล์ power: ใช้ได้ {len(out)} แถว "
                  f"({out['Date/Time'].min()} → {out['Date/Time'].max()})")
     return out, kw_col, phase, notes
-
 # ----------------------------------------------------------------- MERGE
 def merge_sources(temp_df, power_df, cfg):
     """จับคู่ด้วย merge_asof — ทนเวลาที่ไม่ตรงกันเป๊ะ"""
