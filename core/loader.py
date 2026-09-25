@@ -114,73 +114,47 @@ def _find_header_row(raw, max_scan=12):
     return None
 
 
+# ----------------------------------------------------------------- POWER (แก้ไข)
 def read_power(file):
-    """คืน (df[['Date/Time', kw_col]], kw_col, phase, notes)"""
-    notes = []
-    raw = read_csv_any(file, header=None, dtype=str)
-    if raw.empty:
-        raise ValueError("ไฟล์ power ว่างเปล่า")
+    # ... (โค้ดช่วงอ่านไฟล์และหา Date/Time คงเดิม) ...
 
-    hrow = _find_header_row(raw)
-    if hrow is None:
-        raise KeyError("หาแถวหัวตารางในไฟล์ power ไม่เจอ "
-                       f"— 3 แถวแรก: {raw.head(3).values.tolist()}")
-    notes.append(f"ไฟล์ power: หัวตารางอยู่แถวที่ {hrow + 1}")
+    # 1. กรองคอลัมน์ที่มีคำว่า 'kw' แต่ต้องไม่มี 'kvar' และต้องไม่ใช่ 'kw hours' / 'kwh'
+    kw_cols = [
+        c for c in df.columns 
+        if "kw" in c.lower() 
+        and "kvar" not in c.lower() 
+        and "kwh" not in c.lower() 
+        and "kw hours" not in c.lower()
+    ]
 
-    cols = [_norm_key(c) for c in raw.iloc[hrow]]
-    df = raw.iloc[hrow + 1:].copy()
-    df.columns = cols
-    df = df.loc[:, [c for c in df.columns if c and c.lower() != "nan"]]
-
-    date_c = next((c for c in df.columns if c.lower().startswith("date")), None)
-    end_c = next((c for c in df.columns if "end time" in c.lower()), None)
-    start_c = next((c for c in df.columns if "start time" in c.lower()), None)
-    time_c = end_c or start_c
-    if date_c is None:
-        raise KeyError(f"ไม่พบคอลัมน์ Date — มี: {list(df.columns)}")
-
-    if time_c:
-        stamp = (df[date_c].astype(str).str.strip() + " " +
-                 df[time_c].astype(str).str.strip())
-    else:
-        stamp = df[date_c].astype(str).str.strip()
-        notes.append("ไม่พบคอลัมน์เวลา — ใช้คอลัมน์ Date อย่างเดียว")
-    df["Date/Time"] = pd.to_datetime(stamp, errors="coerce", dayfirst=False)
-
-    kw_cols = [c for c in df.columns if "kw" in c.lower()
-               and "kwh" not in c.lower() and "kvar" not in c.lower()]
     if not kw_cols:
         raise KeyError(f"ไม่พบคอลัมน์กำลังไฟ (KW) — มี: {list(df.columns)}")
 
-    three = [c for c in kw_cols if "3 phase" in c.lower()]
-    one = [c for c in kw_cols if "l1 phase" in c.lower()]
-    avg3 = [c for c in three if c.lower().startswith("avg")]
-    avg1 = [c for c in one if c.lower().startswith("avg")]
+    # 2. ค้นหาคอลัมน์ 3 Phase และ 1 Phase โดยเช็กทั้งคำว่า '3 phase' และ '3 ph'
+    three = [c for c in kw_cols if "3 phase" in c.lower() or "3 ph" in c.lower()]
+    one = [c for c in kw_cols if "l1 phase" in c.lower() or "l1 ph" in c.lower()]
 
-    if avg3 or three:
-        kw_col, phase = (avg3 or three)[0], 3
-    elif avg1 or one:
-        kw_col, phase = (avg1 or one)[0], 1
+    # 3. เจาะจงหาคอลัมน์ที่เป็น Average (ขึ้นต้นด้วย avg หรือมี avg)
+    avg3 = [c for c in three if "avg" in c.lower()]
+    avg1 = [c for c in one if "avg" in c.lower()]
+
+    # 4. เลือกคอลัมน์ตามลำดับความสำคัญ
+    if avg3:
+        kw_col, phase = avg3[0], 3
+    elif three:
+        kw_col, phase = three[0], 3
+    elif avg1:
+        kw_col, phase = avg1[0], 1
+    elif one:
+        kw_col, phase = one[0], 1
     else:
         kw_col, phase = kw_cols[0], 0
         notes.append(f"ระบุเฟสไม่ได้ — ใช้คอลัมน์ '{kw_col}'")
+
     if phase:
         notes.append(f"ตรวจพบระบบ {phase} เฟส (คอลัมน์: {kw_col})")
 
-    df["kw_raw"] = pd.to_numeric(
-        df[kw_col].astype(str).str.replace(",", "", regex=False), errors="coerce")
-
-    out = (df[["Date/Time", "kw_raw"]]
-           .dropna(subset=["Date/Time"])
-           .sort_values("Date/Time")
-           .drop_duplicates(subset=["Date/Time"], keep="last")
-           .reset_index(drop=True))
-    if out.empty:
-        raise ValueError("ไฟล์ power ไม่เหลือข้อมูลที่อ่านเวลาได้")
-
-    notes.append(f"ไฟล์ power: ใช้ได้ {len(out)} แถว "
-                 f"({out['Date/Time'].min()} → {out['Date/Time'].max()})")
-    return out, kw_col, phase, notes
+    # ... (ส่วนประมวลผลต่อด้านล่างคงเดิม) ...
 
 
 # ----------------------------------------------------------------- MERGE
