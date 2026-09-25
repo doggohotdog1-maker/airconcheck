@@ -175,18 +175,25 @@ with st.expander("บันทึกการประมวลผล", expanded
         st.caption("• " + n)
 
 ok = m[~m["suspect"]]
+# กรองเอาเฉพาะช่วงที่แอร์ทำงาน (ตัดช่วงแอร์ตัดออก โดยเช็กว่า Power > 0.05 kW หรือไม่)
+air_on = m[m["Power_Corrected (kW)"] > 0.05]
+
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("EER เฉลี่ย (สะอาด)",
-          f"{ok['EER'].mean():.2f}" if ok["EER"].notna().any() else "-",
+k1.metric("EER เฉลี่ย (ขณะแอร์ทำงาน)",
+          f"{air_on['EER'].mean():.2f}" if air_on["EER"].notna().any() else "-",
           f"สเปก {cfg.eer_spec:.2f}")
+
 k2.metric("BTU เฉลี่ย",
-          f"{ok['btu'].mean():,.0f}" if ok["btu"].notna().any() else "-",
+          f"{air_on['btu'].mean():,.0f}" if air_on["btu"].notna().any() else "-",
           f"สเปก {cfg.btu_spec:,.0f}")
+
 k3.metric("kW เฉลี่ย",
-          f"{ok['Power_Corrected (kW)'].mean():.3f}"
-          if ok["Power_Corrected (kW)"].notna().any() else "-",
+          f"{air_on['Power_Corrected (kW)'].mean():.3f}"
+          if air_on["Power_Corrected (kW)"].notna().any() else "-",
           f"สเปก {cfg.power_spec:.3f}")
-k4.metric("แถวน่าสงสัย", f"{int(m['suspect'].sum())} / {len(m)}")
+
+k4.metric("แถวน่าสงสัย (Defect)", f"{int(m['suspect'].sum())} / {len(m)}")
+
 
 fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
                     subplot_titles=("EER", "Power (kW)", "BTU/hr"))
